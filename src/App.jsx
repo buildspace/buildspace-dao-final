@@ -359,8 +359,6 @@ const App = () => {
           bundleDropModule
             .claim("0", 1)
             .then(() => {
-              // Stop loading state.
-              setIsClaiming(false);
               // Set claim state.
               setHasClaimedNFT(true);
               // Show user their fancy new NFT!
@@ -370,6 +368,9 @@ const App = () => {
             });
             .catch((err) => {
               console.error("failed to claim", err);
+            })
+            .finally(() => {
+              // Stop loading state.
               setIsClaiming(false);
             });
         }}
