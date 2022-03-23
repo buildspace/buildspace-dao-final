@@ -1,27 +1,22 @@
-import { ethers } from "ethers";
 import sdk from "./1-initialize-sdk.js";
 
 // This is our governance contract.
-const voteModule = sdk.getVoteModule(
-  "INSERT_VOTING_MODULE_ADDRESS",
-);
+const vote = sdk.getVote("INSERT_VOTE_ADDRESS");
 
 // This is our ERC-20 contract.
-const tokenModule = sdk.getTokenModule(
-  "INSERT_TOKEN_MODULE_ADDRESS",
-);
+const token = sdk.getToken("INSERT_TOKEN_ADDRESS");
 
 (async () => {
   try {
     // Give our treasury the power to mint additional token if needed.
-    await tokenModule.grantRole("minter", voteModule.address);
+    await token.roles.grant("minter", vote.getAddress());
 
     console.log(
-      "Successfully gave vote module permissions to act on token module"
+      "Successfully gave vote contract permissions to act on token contract"
     );
   } catch (error) {
     console.error(
-      "failed to grant vote module permissions on token module",
+      "failed to grant vote contract permissions on token contract",
       error
     );
     process.exit(1);
@@ -29,22 +24,22 @@ const tokenModule = sdk.getTokenModule(
 
   try {
     // Grab our wallet's token balance, remember -- we hold basically the entire supply right now!
-    const ownedTokenBalance = await tokenModule.balanceOf(
+    const ownedTokenBalance = await token.balanceOf(
       process.env.WALLET_ADDRESS
     );
 
     // Grab 90% of the supply that we hold.
-    const ownedAmount = ethers.BigNumber.from(ownedTokenBalance.value);
-    const percent90 = ownedAmount.div(100).mul(90);
+    const ownedAmount = ownedTokenBalance.displayValue;
+    const percent90 = Number(ownedAmount) / 100 * 90;
 
     // Transfer 90% of the supply to our voting contract.
-    await tokenModule.transfer(
-      voteModule.address,
+    await token.transfer(
+      vote.getAddress(),
       percent90
-    );
+    ); 
 
-    console.log("✅ Successfully transferred tokens to vote module");
+    console.log("✅ Successfully transferred " + percent90 + " tokens to vote contract");
   } catch (err) {
-    console.error("failed to transfer tokens to vote module", err);
+    console.error("failed to transfer tokens to vote contract", err);
   }
 })();
