@@ -1,10 +1,12 @@
-import { useAddress, useMetamask, useEditionDrop, useToken, useVote } from '@thirdweb-dev/react';
+import { useAddress, useMetamask, useEditionDrop, useToken, useVote, useNetwork } from '@thirdweb-dev/react';
+import { ChainId } from '@thirdweb-dev/sdk'
 import { useState, useEffect, useMemo } from 'react';
-import { ethers } from 'ethers';
+import { AddressZero } from "@ethersproject/constants";
 
 const App = () => {
   // Use the hooks thirdweb give us.
   const address = useAddress();
+  const network = useNetwork();
   const connectWithMetamask = useMetamask();
   console.log("👋 Address:", address);
 
@@ -21,7 +23,7 @@ const App = () => {
   const [isClaiming, setIsClaiming] = useState(false);
 
   // Holds the amount of token each member has in state.
-  const [memberTokenAmounts, setMemberTokenAmounts] = useState({});
+  const [memberTokenAmounts, setMemberTokenAmounts] = useState([]);
   // The array holding all of our members addresses.
   const [memberAddresses, setMemberAddresses] = useState([]);
 
@@ -45,7 +47,6 @@ const App = () => {
       try {
         const proposals = await vote.getAll();
         setProposals(proposals);
-        console.log(proposals)
       } catch (error) {
         console.log("failed to get proposals", error);
       }
@@ -67,7 +68,7 @@ const App = () => {
 
     const checkIfUserHasVoted = async () => {
       try {
-        const hasVoted = await vote.hasVoted(proposals[0].proposalId, address);
+        const hasVoted = await vote.hasVoted(proposals[0].proposalId);
         setHasVoted(hasVoted);
         if (hasVoted) {
           console.log("🥵 User has already voted");
@@ -124,15 +125,15 @@ const App = () => {
   // Now, we combine the memberAddresses and memberTokenAmounts into a single array
   const memberList = useMemo(() => {
     return memberAddresses.map((address) => {
+      // We're checking if we are finding the address in the memberTokenAmounts array.
+      // If we are, we'll return the amount of token the user has.
+      // Otherwise, return 0.
+      const member = memberTokenAmounts?.find(({ holder }) => holder === address);
+
       return {
         address,
-        tokenAmount: ethers.utils.formatUnits(
-          // If the address isn't in memberTokenAmounts, it means they don't
-          // hold any of our token.
-          memberTokenAmounts[address] || 0,
-          18,
-        ),
-      };
+        tokenAmount: member?.balance.displayValue || "0",
+      }
     });
   }, [memberAddresses, memberTokenAmounts]);
 
@@ -187,6 +188,18 @@ const App = () => {
     );
   }
 
+  if (network?.[0].data.chain.id !== ChainId.Rinkeby) {
+    return (
+      <div className="unsupported-network">
+        <h2>Please connect to Rinkeby</h2>
+        <p>
+          This dapp only works on the Rinkeby network, please switch networks
+          in your connected wallet.
+        </p>
+      </div>
+    );
+  }
+
   // If the user has already claimed their NFT we want to display the interal DAO page to them
   // only DAO members will see this. Render all the members + token amounts.
   if (hasClaimedNFT) {
@@ -228,15 +241,14 @@ const App = () => {
 
                 // lets get the votes from the form for the values
                 const votes = proposals.map((proposal) => {
-                  console.log(proposal);
-                  let voteResult = {
+                  const voteResult = {
                     proposalId: proposal.proposalId,
                     //abstain by default
                     vote: 2,
                   };
                   proposal.votes.forEach((vote) => {
                     const elem = document.getElementById(
-                      proposal.proposalId.toNumber() + "-" + vote.type
+                      proposal.proposalId + "-" + vote.type
                     );
 
                     if (elem.checked) {
@@ -252,21 +264,21 @@ const App = () => {
                   //we'll check if the wallet still needs to delegate their tokens before they can vote
                   const delegation = await token.getDelegationOf(address);
                   // if the delegation is the 0x0 address that means they have not delegated their governance tokens yet
-                  if (delegation === ethers.constants.AddressZero) {
+                  if (delegation === AddressZero) {
                     //if they haven't delegated their tokens yet, we'll have them delegate them before voting
                     await token.delegateTo(address);
                   }
                   // then we need to vote on the proposals
                   try {
                     await Promise.all(
-                      votes.map(async ({ proposalId }) => {
+                      votes.map(async ({ proposalId, vote: _vote }) => {
                         // before voting we first need to check whether the proposal is open for voting
                         // we first need to get the latest state of the proposal
                         const proposal = await vote.get(proposalId);
                         // then we check if the proposal is open for voting (state === 1 means it is open)
                         if (proposal.state === 1) {
                           // if it is open for voting, we'll vote on it
-                          return vote.vote(proposalId, vote.vote);
+                          return vote.vote(proposalId, _vote);
                         }
                         // if the proposal is not open for voting we just return nothing, letting us continue
                         return;
@@ -278,7 +290,6 @@ const App = () => {
                       await Promise.all(
                         votes.map(async ({ proposalId }) => {
                           // we'll first get the latest state of the proposal again, since we may have just voted before
-                          console.log("proposalId", proposalId);
                           const proposal = await vote.get(proposalId);
 
                           //if the state is in state 4 (meaning that it is ready to be executed), we'll execute the proposal
@@ -334,10 +345,12 @@ const App = () => {
                     ? "You Already Voted"
                     : "Submit Votes"}
               </button>
-              <small>
-                This will trigger multiple transactions that you will need to
-                sign.
-              </small>
+              {!hasVoted && (
+                <small>
+                  This will trigger multiple transactions that you will need to
+                  sign.
+                </small>
+              )}
             </form>
           </div>
         </div>
