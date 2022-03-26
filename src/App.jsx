@@ -1,37 +1,29 @@
-import { useEffect, useMemo, useState } from "react";
-import { ethers } from "ethers";
-
-import { useWeb3 } from "@3rdweb/hooks";
-import { ThirdwebSDK } from "@3rdweb/sdk";
-
-const sdk = new ThirdwebSDK("rinkeby");
-
-const bundleDropModule = sdk.getBundleDropModule(
-  "<DROP_MODULE_ADDRESS>",
-);
-
-const tokenModule = sdk.getTokenModule(
-  "<TOKEN_MODULE_ADDRESS>"
-);
-
-const voteModule = sdk.getVoteModule(
-  "<VOTE_MODULE_ADDRESS>",
-);
+import { useAddress, useMetamask, useEditionDrop, useToken, useVote, useNetwork } from '@thirdweb-dev/react';
+import { ChainId } from '@thirdweb-dev/sdk'
+import { useState, useEffect, useMemo } from 'react';
+import { AddressZero } from "@ethersproject/constants";
 
 const App = () => {
-  const { connectWallet, address, error, provider } = useWeb3();
+  // Use the hooks thirdweb give us.
+  const address = useAddress();
+  const network = useNetwork();
+  const connectWithMetamask = useMetamask();
   console.log("👋 Address:", address);
 
-  // The signer is required to sign transactions on the blockchain.
-  // Without it we can only read data, not write.
-  const signer = provider ? provider.getSigner() : undefined;
+  // Initialize our editionDrop contract
+  const editionDrop = useEditionDrop("INSERT_EDITION_DROP_ADDRESS");
+  // Initialize our token contract
+  const token = useToken("INSERT_TOKEN_ADDRESS")
+  // Initialize our vote contract
+  const vote = useVote("INSERT_VOTE_ADDRESS");
 
+  // State variable for us to know if user has our NFT.
   const [hasClaimedNFT, setHasClaimedNFT] = useState(false);
   // isClaiming lets us easily keep a loading state while the NFT is minting.
   const [isClaiming, setIsClaiming] = useState(false);
 
   // Holds the amount of token each member has in state.
-  const [memberTokenAmounts, setMemberTokenAmounts] = useState({});
+  const [memberTokenAmounts, setMemberTokenAmounts] = useState([]);
   // The array holding all of our members addresses.
   const [memberAddresses, setMemberAddresses] = useState([]);
 
@@ -40,107 +32,27 @@ const App = () => {
     return str.substring(0, 6) + "..." + str.substring(str.length - 4);
   };
 
-  // This useEffect grabs all our the addresses of our members holding our NFT.
-  useEffect(() => {
-    if (!hasClaimedNFT) {
-      return;
-    }
-
-    // Just like we did in the 7-airdrop-token.js file! Grab the users who hold our NFT
-    // with tokenId 0.
-    bundleDropModule
-      .getAllClaimerAddresses("0")
-      .then((addresess) => {
-        console.log("🚀 Members addresses", addresess);
-        setMemberAddresses(addresess);
-      })
-      .catch((err) => {
-        console.error("failed to get member list", err);
-      });
-  }, [hasClaimedNFT]);
-
-  // This useEffect grabs the # of token each member holds.
-  useEffect(() => {
-    if (!hasClaimedNFT) {
-      return;
-    }
-
-    // Grab all the balances.
-    tokenModule
-      .getAllHolderBalances()
-      .then((amounts) => {
-        console.log("👜 Amounts", amounts);
-        setMemberTokenAmounts(amounts);
-      })
-      .catch((err) => {
-        console.error("failed to get token amounts", err);
-      });
-  }, [hasClaimedNFT]);
-
-  // Now, we combine the memberAddresses and memberTokenAmounts into a single array
-  const memberList = useMemo(() => {
-    return memberAddresses.map((address) => {
-      return {
-        address,
-        tokenAmount: ethers.utils.formatUnits(
-          // If the address isn't in memberTokenAmounts, it means they don't
-          // hold any of our token.
-          memberTokenAmounts[address] || 0,
-          18,
-        ),
-      };
-    });
-  }, [memberAddresses, memberTokenAmounts]);
-
-  // Another useEffect!
-  useEffect(() => {
-    // We pass the signer to the sdk, which enables us to interact with
-    // our deployed contract!
-    sdk.setProviderOrSigner(signer);
-  }, [signer]);
-
-  useEffect(() => {
-    if (!address) {
-      return;
-    }
-    return bundleDropModule
-      .balanceOf(address, "0")
-      .then((balance) => {
-        if (balance.gt(0)) {
-          setHasClaimedNFT(true);
-          console.log("🌟 this user has a membership NFT!");
-        } else {
-          setHasClaimedNFT(false);
-          console.log("😭 this user doesn't have a membership NFT.");
-        }
-      })
-      .catch((error) => {
-        setHasClaimedNFT(false);
-        console.error("failed to nft balance", error);
-      });
-  }, [address]);
-
   const [proposals, setProposals] = useState([]);
   const [isVoting, setIsVoting] = useState(false);
   const [hasVoted, setHasVoted] = useState(false);
 
-  // Retreive all our existing proposals from the contract.
+  // Retrieve all our existing proposals from the contract.
   useEffect(() => {
     if (!hasClaimedNFT) {
       return;
     }
-    // A simple call to voteModule.getAll() to grab the proposals.
-    voteModule
-      .getAll()
-      .then((proposals) => {
-        // Set state!
+
+    // A simple call to vote.getAll() to grab the proposals.
+    const getAllProposals = async () => {
+      try {
+        const proposals = await vote.getAll();
         setProposals(proposals);
-        console.log("🌈 Proposals:", proposals);
-      })
-      .catch((err) => {
-        console.error("failed to get proposals", err);
-      });
-  }, [hasClaimedNFT]);
+      } catch (error) {
+        console.log("failed to get proposals", error);
+      }
+    };
+    getAllProposals();
+  }, [hasClaimedNFT, vote]);
 
   // We also need to check if the user already voted.
   useEffect(() => {
@@ -148,25 +60,135 @@ const App = () => {
       return;
     }
 
-    // If we haven't finished retreieving the proposals from the useEffect above
+    // If we haven't finished retrieving the proposals from the useEffect above
     // then we can't check if the user voted yet!
     if (!proposals.length) {
       return;
     }
 
-    // Check if the user has already voted on the first proposal.
-    voteModule
-      .hasVoted(proposals[0].proposalId, address)
-      .then((hasVoted) => {
+    const checkIfUserHasVoted = async () => {
+      try {
+        const hasVoted = await vote.hasVoted(proposals[0].proposalId);
         setHasVoted(hasVoted);
-        console.log("🥵 User has already voted");
-      })
-      .catch((err) => {
-        console.error("failed to check if wallet has voted", err);
-      });
-  }, [hasClaimedNFT, proposals, address]);
+        if (hasVoted) {
+          console.log("🥵 User has already voted");
+        } else {
+          console.log("🙂 User has not voted yet");
+        }
+      } catch (error) {
+        console.error("Failed to check if wallet has voted", error);
+      }
+    };
+    checkIfUserHasVoted();
 
-  if (error && error.name === "UnsupportedChainIdError") {
+  }, [hasClaimedNFT, proposals, address, vote]);
+
+  // This useEffect grabs all the addresses of our members holding our NFT.
+  useEffect(() => {
+    if (!hasClaimedNFT) {
+      return;
+    }
+
+    // Just like we did in the 7-airdrop-token.js file! Grab the users who hold our NFT
+    // with tokenId 0.
+    const getAllAddresses = async () => {
+      try {
+        const memberAddresses = await editionDrop.history.getAllClaimerAddresses(0);
+        setMemberAddresses(memberAddresses);
+        console.log("🚀 Members addresses", memberAddresses);
+      } catch (error) {
+        console.error("failed to get member list", error);
+      }
+
+    };
+    getAllAddresses();
+  }, [hasClaimedNFT, editionDrop.history]);
+
+  // This useEffect grabs the # of token each member holds.
+  useEffect(() => {
+    if (!hasClaimedNFT) {
+      return;
+    }
+
+    const getAllBalances = async () => {
+      try {
+        const amounts = await token.history.getAllHolderBalances();
+        setMemberTokenAmounts(amounts);
+        console.log("👜 Amounts", amounts);
+      } catch (error) {
+        console.error("failed to get member balances", error);
+      }
+    };
+    getAllBalances();
+  }, [hasClaimedNFT, token.history]);
+
+  // Now, we combine the memberAddresses and memberTokenAmounts into a single array
+  const memberList = useMemo(() => {
+    return memberAddresses.map((address) => {
+      // We're checking if we are finding the address in the memberTokenAmounts array.
+      // If we are, we'll return the amount of token the user has.
+      // Otherwise, return 0.
+      const member = memberTokenAmounts?.find(({ holder }) => holder === address);
+
+      return {
+        address,
+        tokenAmount: member?.balance.displayValue || "0",
+      }
+    });
+  }, [memberAddresses, memberTokenAmounts]);
+
+  useEffect(() => {
+    // If they don't have an connected wallet, exit!
+    if (!address) {
+      return;
+    }
+
+    const checkBalance = async () => {
+      try {
+        const balance = await editionDrop.balanceOf(address, 0);
+        if (balance.gt(0)) {
+          setHasClaimedNFT(true);
+          console.log("🌟 this user has a membership NFT!");
+        } else {
+          setHasClaimedNFT(false);
+          console.log("😭 this user doesn't have a membership NFT.");
+        }
+      } catch (error) {
+        setHasClaimedNFT(false);
+        console.error("Failed to get balance", error);
+      }
+    };
+    checkBalance();
+  }, [address, editionDrop]);
+
+  const mintNft = async () => {
+    try {
+      setIsClaiming(true);
+      await editionDrop.claim("0", 1);
+      console.log(`🌊 Successfully Minted! Check it out on OpenSea: https://testnets.opensea.io/assets/${editionDrop.getAddress()}/0`);
+      setHasClaimedNFT(true);
+    } catch (error) {
+      setHasClaimedNFT(false);
+      console.error("Failed to mint NFT", error);
+    } finally {
+      setIsClaiming(false);
+    }
+  };
+
+  // This is the case where the user hasn't connected their wallet
+  // to your web app. Let them call connectWallet.
+  if (!address) {
+    return (
+      <div className="landing">
+        <h1>Welcome to NarutoDAO</h1>
+        <button onClick={connectWithMetamask} className="btn-hero">
+          Connect your wallet
+        </button>
+      </div>
+    );
+  }
+
+  if (network?.[0].data.chain.id !== ChainId.Rinkeby) {
     return (
       <div className="unsupported-network">
         <h2>Please connect to Rinkeby</h2>
@@ -174,17 +196,6 @@ const App = () => {
           This dapp only works on the Rinkeby network, please switch networks
           in your connected wallet.
         </p>
-      </div>
-    );
-  }
-
-  if (!address) {
-    return (
-      <div className="landing">
-        <h1>Welcome to NarutoDAO</h1>
-        <button onClick={() => connectWallet("injected")} className="btn-hero">
-          Connect your wallet
-        </button>
       </div>
     );
   }
@@ -230,7 +241,7 @@ const App = () => {
 
                 // lets get the votes from the form for the values
                 const votes = proposals.map((proposal) => {
-                  let voteResult = {
+                  const voteResult = {
                     proposalId: proposal.proposalId,
                     //abstain by default
                     vote: 2,
@@ -251,23 +262,23 @@ const App = () => {
                 // first we need to make sure the user delegates their token to vote
                 try {
                   //we'll check if the wallet still needs to delegate their tokens before they can vote
-                  const delegation = await tokenModule.getDelegationOf(address);
+                  const delegation = await token.getDelegationOf(address);
                   // if the delegation is the 0x0 address that means they have not delegated their governance tokens yet
-                  if (delegation === ethers.constants.AddressZero) {
+                  if (delegation === AddressZero) {
                     //if they haven't delegated their tokens yet, we'll have them delegate them before voting
-                    await tokenModule.delegateTo(address);
+                    await token.delegateTo(address);
                   }
                   // then we need to vote on the proposals
                   try {
                     await Promise.all(
-                      votes.map(async (vote) => {
+                      votes.map(async ({ proposalId, vote: _vote }) => {
                         // before voting we first need to check whether the proposal is open for voting
                         // we first need to get the latest state of the proposal
-                        const proposal = await voteModule.get(vote.proposalId);
+                        const proposal = await vote.get(proposalId);
                         // then we check if the proposal is open for voting (state === 1 means it is open)
                         if (proposal.state === 1) {
                           // if it is open for voting, we'll vote on it
-                          return voteModule.vote(vote.proposalId, vote.vote);
+                          return vote.vote(proposalId, _vote);
                         }
                         // if the proposal is not open for voting we just return nothing, letting us continue
                         return;
@@ -277,15 +288,13 @@ const App = () => {
                       // if any of the propsals are ready to be executed we'll need to execute them
                       // a proposal is ready to be executed if it is in state 4
                       await Promise.all(
-                        votes.map(async (vote) => {
+                        votes.map(async ({ proposalId }) => {
                           // we'll first get the latest state of the proposal again, since we may have just voted before
-                          const proposal = await voteModule.get(
-                            vote.proposalId
-                          );
+                          const proposal = await vote.get(proposalId);
 
                           //if the state is in state 4 (meaning that it is ready to be executed), we'll execute the proposal
                           if (proposal.state === 4) {
-                            return voteModule.execute(vote.proposalId);
+                            return vote.execute(proposalId);
                           }
                         })
                       );
@@ -307,22 +316,22 @@ const App = () => {
                 }
               }}
             >
-              {proposals.map((proposal, index) => (
+              {proposals.map((proposal) => (
                 <div key={proposal.proposalId} className="card">
                   <h5>{proposal.description}</h5>
                   <div>
-                    {proposal.votes.map((vote) => (
-                      <div key={vote.type}>
+                    {proposal.votes.map(({ type, label }) => (
+                      <div key={type}>
                         <input
                           type="radio"
-                          id={proposal.proposalId + "-" + vote.type}
+                          id={proposal.proposalId + "-" + type}
                           name={proposal.proposalId}
-                          value={vote.type}
-                          //default the "abstain" vote to chedked
-                          defaultChecked={vote.type === 2}
+                          value={type}
+                          //default the "abstain" vote to checked
+                          defaultChecked={type === 2}
                         />
-                        <label htmlFor={proposal.proposalId + "-" + vote.type}>
-                          {vote.label}
+                        <label htmlFor={proposal.proposalId + "-" + type}>
+                          {label}
                         </label>
                       </div>
                     ))}
@@ -336,10 +345,12 @@ const App = () => {
                     ? "You Already Voted"
                     : "Submit Votes"}
               </button>
-              <small>
-                This will trigger multiple transactions that you will need to
-                sign.
-              </small>
+              {!hasVoted && (
+                <small>
+                  This will trigger multiple transactions that you will need to
+                  sign.
+                </small>
+              )}
             </form>
           </div>
         </div>
@@ -353,31 +364,12 @@ const App = () => {
       <h1>Mint your free 🍪DAO Membership NFT</h1>
       <button
         disabled={isClaiming}
-        onClick={() => {
-          setIsClaiming(true);
-          // Call bundleDropModule.claim("0", 1) to mint nft to user's wallet.
-          bundleDropModule
-            .claim("0", 1)
-            .catch((err) => {
-              console.error("failed to claim", err);
-              setIsClaiming(false);
-            })
-            .finally(() => {
-              // Stop loading state.
-              setIsClaiming(false);
-              // Set claim state.
-              setHasClaimedNFT(true);
-              // Show user their fancy new NFT!
-              console.log(
-                `Successfully Minted! Check it our on OpenSea: https://testnets.opensea.io/assets/${bundleDropModule.address}/0`
-              );
-            });
-        }}
+        onClick={mintNft}
       >
         {isClaiming ? "Minting..." : "Mint your nft (FREE)"}
       </button>
     </div>
   );
-};
+}
 
 export default App;

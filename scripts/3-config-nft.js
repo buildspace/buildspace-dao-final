@@ -1,13 +1,11 @@
 import sdk from "./1-initialize-sdk.js";
 import { readFileSync } from "fs";
 
-const bundleDrop = sdk.getBundleDropModule(
-  "<DROP_MODULE_ADDRESS>",
-);
+const editionDrop = sdk.getEditionDrop("INSERT_EDITION_DROP_ADDRESS");
 
 (async () => {
   try {
-    await bundleDrop.createBatch([
+    await editionDrop.createBatch([
       {
         name: "Leaf Village Headband",
         description: "This NFT will give you access to NarutoDAO!",
