@@ -309,7 +309,7 @@ const App = () => {
                     console.error("failed to vote", err);
                   }
                 } catch (err) {
-                  console.error("failed to delegate tokens");
+                  console.error("failed to delegate tokens", err);
                 } finally {
                   // in *either* case we need to set the isVoting state to false to enable the button again
                   setIsVoting(false);
