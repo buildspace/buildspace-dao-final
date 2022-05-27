@@ -32,6 +32,7 @@ const token = sdk.getToken("INSERT_TOKEN_ADDRESS");
         ),
       }
     ];
+    await token.delegateTo(process.env.WALLET_ADDRESS)
 
     await vote.propose(description, executions);
 
@@ -61,6 +62,7 @@ const token = sdk.getToken("INSERT_TOKEN_ADDRESS");
         toAddress: token.getAddress(),
       },
     ];
+    await token.delegateTo(process.env.WALLET_ADDRESS)
 
     await vote.propose(description, executions);
 
