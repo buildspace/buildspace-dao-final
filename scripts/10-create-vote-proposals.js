@@ -1,14 +1,12 @@
 import sdk from "./1-initialize-sdk.js";
 import { ethers } from "ethers";
 
-// This is our governance contract.
-const vote = sdk.getVote("INSERT_VOTE_ADDRESS");
-
-// This is our ERC-20 contract.
-const token = sdk.getToken("INSERT_TOKEN_ADDRESS");
-
 (async () => {
   try {
+    // This is our governance contract.
+    const vote = await sdk.getContract("INSERT_VOTE_ADDRESS", "vote");
+    // This is our ERC-20 contract.
+    const token = await sdk.getContract("INSERT_TOKEN_ADDRESS", "token");
     // Create proposal to mint 420,000 new token to the treasury.
     const amount = 420_000;
     const description = "Should the DAO mint an additional " + amount + " tokens into the treasury?";
@@ -42,6 +40,10 @@ const token = sdk.getToken("INSERT_TOKEN_ADDRESS");
   }
 
   try {
+    // This is our governance contract.
+    const vote = await sdk.getContract("INSERT_VOTE_ADDRESS", "vote");
+    // This is our ERC-20 contract.
+    const token = await sdk.getContract("INSERT_TOKEN_ADDRESS", "token");
     // Create proposal to transfer ourselves 6,900 tokens for being awesome.
     const amount = 6_900;
     const description = "Should the DAO transfer " + amount + " tokens from the treasury to " +
