@@ -1,13 +1,11 @@
 import sdk from "./1-initialize-sdk.js";
 
-// This is our governance contract.
-const vote = sdk.getVote("INSERT_VOTE_ADDRESS");
-
-// This is our ERC-20 contract.
-const token = sdk.getToken("INSERT_TOKEN_ADDRESS");
-
 (async () => {
   try {
+    // This is our governance contract.
+    const vote = await sdk.getContract("INSERT_VOTE_ADDRESS", "vote");
+    // This is our ERC-20 contract.
+    const token = await sdk.getContract("INSERT_TOKEN_ADDRESS", "token");
     // Give our treasury the power to mint additional token if needed.
     await token.roles.grant("minter", vote.getAddress());
 
@@ -23,6 +21,10 @@ const token = sdk.getToken("INSERT_TOKEN_ADDRESS");
   }
 
   try {
+    // This is our governance contract.
+    const vote = await sdk.getContract("INSERT_VOTE_ADDRESS", "vote");
+    // This is our ERC-20 contract.
+    const token = await sdk.getContract("INSERT_TOKEN_ADDRESS", "token");
     // Grab our wallet's token balance, remember -- we hold basically the entire supply right now!
     const ownedTokenBalance = await token.balanceOf(
       process.env.WALLET_ADDRESS

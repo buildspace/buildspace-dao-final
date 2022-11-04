@@ -1,10 +1,9 @@
 import sdk from "./1-initialize-sdk.js";
 import { readFileSync } from "fs";
 
-const editionDrop = sdk.getEditionDrop("INSERT_EDITION_DROP_ADDRESS");
-
 (async () => {
   try {
+    const editionDrop = await sdk.getContract("INSERT_EDITION_DROP_ADDRESS", "edition-drop");
     await editionDrop.createBatch([
       {
         name: "Leaf Village Headband",

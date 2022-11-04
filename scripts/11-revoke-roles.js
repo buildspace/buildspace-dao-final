@@ -1,9 +1,8 @@
 import sdk from "./1-initialize-sdk.js";
 
-const token = sdk.getToken("INSERT_TOKEN_ADDRESS");
-
 (async () => {
   try {
+    const token = await sdk.getContract("INSERT_TOKEN_ADDRESS", "token");
     // Log the current roles.
     const allRoles = await token.roles.getAll();
 
